@@ -13,10 +13,8 @@ class marginal_tax_rate(Variable):
         netinc_base = person.household("household_net_income", period)
         if delta is None:
             delta = parameters(period).simulation.marginal_tax_rate_delta
-        adult_count = parameters(period).simulation.marginal_tax_rate_adults
         sim = person.simulation
         mtr_values = np.zeros(person.count, dtype=np.float32)
-        adult_indexes = person("adult_earnings_index", period)
         employment_income = person("employment_income", period)
         self_employment_income = person("self_employment_income", period)
         total_earnings = employment_income + self_employment_income
@@ -28,7 +26,7 @@ class marginal_tax_rate(Variable):
             where=total_earnings > 0,
         )
 
-        alt_sim = sim.get_branch(f"mtr_for_adult")
+        alt_sim = sim.get_branch("mtr_for_adult")
         for variable in sim.tax_benefit_system.variables:
             if (
                 variable not in sim.input_variables
@@ -50,8 +48,8 @@ class marginal_tax_rate(Variable):
         alt_person = alt_sim.person
         netinc_alt = alt_person.household("household_net_income", period)
         increase = netinc_alt - netinc_base
-        mtr_values += np.max(1 - increase / delta, 0)
-        del sim.branches[f"mtr_for_adult"]
+        mtr_values += np.maximum(1 - increase / delta, 0)
+        del sim.branches["mtr_for_adult"]
         return mtr_values
 
 
