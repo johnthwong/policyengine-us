@@ -9,9 +9,10 @@ class marginal_tax_rate(Variable):
     value_type = float
     unit = "/1"
 
-    def formula(person, period, parameters):
+    def formula(person, period, parameters, delta: float = None):
         netinc_base = person.household("household_net_income", period)
-        delta = parameters(period).simulation.marginal_tax_rate_delta
+        if delta is None:
+            delta = parameters(period).simulation.marginal_tax_rate_delta
         adult_count = parameters(period).simulation.marginal_tax_rate_adults
         sim = person.simulation
         mtr_values = np.zeros(person.count, dtype=np.float32)
@@ -27,31 +28,30 @@ class marginal_tax_rate(Variable):
             where=total_earnings > 0,
         )
 
-        for adult_index in range(1, 1 + adult_count):
-            alt_sim = sim.get_branch(f"mtr_for_adult_{adult_index}")
-            for variable in sim.tax_benefit_system.variables:
-                if (
-                    variable not in sim.input_variables
-                    or variable == "employment_income"
-                ):
-                    alt_sim.delete_arrays(variable)
-            mask = adult_index == adult_indexes
-            alt_sim.set_input(
-                "employment_income",
-                period,
-                employment_income + mask * delta * emp_self_emp_ratio,
-            )
-            alt_sim.set_input(
-                "self_employment_income",
-                period,
-                self_employment_income
-                + mask * delta * (1 - emp_self_emp_ratio),
-            )
-            alt_person = alt_sim.person
-            netinc_alt = alt_person.household("household_net_income", period)
-            increase = netinc_alt - netinc_base
-            mtr_values += where(mask, 1 - increase / delta, 0)
-            del sim.branches[f"mtr_for_adult_{adult_index}"]
+        alt_sim = sim.get_branch(f"mtr_for_adult")
+        for variable in sim.tax_benefit_system.variables:
+            if (
+                variable not in sim.input_variables
+                or variable == "employment_income"
+            ):
+                alt_sim.delete_arrays(variable)
+
+        alt_sim.set_input(
+            "employment_income",
+            period,
+            employment_income + delta * emp_self_emp_ratio,
+        )
+        alt_sim.set_input(
+            "self_employment_income",
+            period,
+            self_employment_income
+            + delta * (1 - emp_self_emp_ratio),
+        )
+        alt_person = alt_sim.person
+        netinc_alt = alt_person.household("household_net_income", period)
+        increase = netinc_alt - netinc_base
+        mtr_values += np.max(1 - increase / delta, 0)
+        del sim.branches[f"mtr_for_adult"]
         return mtr_values
 
 
